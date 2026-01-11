@@ -503,6 +503,17 @@ app.delete('/api/members/:id', verifyOwner, async (req, res) => {
     await NewMember.destroy({ where: { id: req.params.id } });
     res.json({ message: 'Deleted' });
 });
+app.get('/api/attendance/employee/:employeeId', async (req, res) => {
+    try {
+        const logs = await Attendance.findAll({
+            where: { employee_id: req.params.employeeId },
+            order: [['date', 'DESC']]
+        });
+        res.json(logs);
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // ==========================================
 // 8. START SERVER
