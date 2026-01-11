@@ -363,8 +363,8 @@ if (existing) {
 });
 
 // --- IMPROVED CLOCK OUT ROUTE ---
-app.put('/api/attendance/clock-out', upload.single('image'), async (req, res) => {
-    try {
+app.post('/api/attendance/clock-out', upload.single('image'), async (req, res) => {
+
         const { employee_id } = req.body;
 
         // 1. Validation
