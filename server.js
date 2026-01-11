@@ -20,8 +20,9 @@ const corsOptions = {
     optionsSuccessStatus: 200
 };
 app.use(cors(corsOptions));
-app.use(express.json());
-app.use(express.urlencoded({ extended: true })); // Required for parsing form-data text fields
+app.use(express.json({ limit: '20mb' }));
+app.use(express.urlencoded({ limit: '20mb', extended: true }));
+ // Required for parsing form-data text fields
 
 // Debug Logger
 app.use((req, res, next) => {
@@ -58,7 +59,13 @@ const storage = multer.diskStorage({
     }
 });
 
-const upload = multer({ storage: storage });
+const upload = multer({ 
+  storage,
+  limits: {
+    fileSize: 10 * 1024 * 1024, // 10MB
+  },
+});
+
 
 // Make the 'uploads' folder public so frontend can display images
 app.use('/uploads', express.static('uploads')); 
