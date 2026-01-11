@@ -305,21 +305,40 @@ app.delete('/api/employees/:id', verifyOwner, async (req, res) => {
 // UPDATED CLOCK-IN ROUTE (Checks if Employee exists first)
 app.post('/api/attendance/clock-in', upload.single('image'), async (req, res) => {
     try {
+        console.log("--- CLOCK IN DEBUG ---");
+        console.log("1. Body Received:", req.body);
+        console.log("2. File Received:", req.file ? req.file.filename : "No File");
+
         const { employee_id } = req.body;
 
-        // 1. Validate Employee Exists
-        const employee = await Employee.findByPk(employee_id);
-        if (!employee) {
-            return res.status(404).json({ error: 'Employee not found! Please check the ID.' });
+        // 1. VALIDATION: Check if ID was actually sent
+        if (!employee_id || employee_id === 'undefined') {
+            return res.status(400).json({ error: 'Employee ID is missing from request body.' });
         }
 
-        // 2. Check if already clocked in
-        const existing = await Attendance.findOne({ where: { employee_id, date: new Date() } });
-        if (existing) {
-            return res.status(400).json({ error: 'Already clocked in today.' });
+        // 2. INTEGRITY CHECK: Check if this Employee actually exists in DB
+        const validEmployee = await Employee.findByPk(employee_id);
+        if (!validEmployee) {
+            return res.status(404).json({ error: 'This Employee ID does not exist in the database.' });
         }
 
-        // 3. Create Record
+        // 3. DUPLICATE CHECK: Check for existing attendance today
+        const startOfDay = new Date();
+        startOfDay.setHours(0, 0, 0, 0);
+        const endOfDay = new Date();
+        endOfDay.setHours(23, 59, 59, 999);
+        
+        const { Op } = require('sequelize'); // Make sure Op is imported at the top
+        const existing = await Attendance.findOne({ 
+            where: { 
+                employee_id,
+                date: { [Op.between]: [startOfDay, endOfDay] }
+            } 
+        });
+
+        if (existing) return res.status(400).json({ error: 'Already clocked in for today.' });
+
+        // 4. CREATE RECORD
         const newRecord = await Attendance.create({
             employee_id,
             date: new Date(),
@@ -328,11 +347,12 @@ app.post('/api/attendance/clock-in', upload.single('image'), async (req, res) =>
             clock_in_image: req.file ? `/uploads/${req.file.filename}` : null
         });
 
-        res.status(201).json({ message: 'Clocked In Successfully', data: newRecord });
+        console.log(">> Success: Clock In Recorded");
+        res.status(201).json({ message: 'Clocked In', data: newRecord });
 
     } catch (error) {
-        console.error("Clock In Error:", error); // Helpful for debugging
-        res.status(500).json({ error: error.message });
+        console.error(">> ERROR:", error);
+        res.status(500).json({ error: error.message }); 
     }
 });
 
