@@ -442,12 +442,12 @@ app.post('/api/leaves', async (req, res) => { /* ... Same as before ... */
     } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
-app.get('/api/leaves', verifyOwner, async (req, res) => {
+app.get('/api/leaves', async (req, res) => {
     const requests = await LeaveRequest.findAll({ include: [{ model: Employee, attributes: ['full_name'] }], order: [['created_at', 'DESC']] });
     res.json(requests);
 });
 
-app.put('/api/leaves/:id/status', verifyOwner, async (req, res) => {
+app.put('/api/leaves/:id/status', async (req, res) => {
     const { id } = req.params; const { status } = req.body;
     const leave = await LeaveRequest.findByPk(id);
     if (!leave) return res.status(404).json({ error: 'Not found' });
@@ -464,7 +464,7 @@ app.post('/api/holidays', verifyOwner, async (req, res) => {
     res.status(201).json(newHoliday);
 });
 
-app.get('/api/members', verifyOwner, async (req, res) => {
+app.get('/api/members', async (req, res) => {
     const members = await NewMember.findAll({ order: [['created_at', 'DESC']] });
     res.json(members);
 });
