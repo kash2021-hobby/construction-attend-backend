@@ -323,20 +323,19 @@ app.post('/api/attendance/clock-in', upload.single('image'), async (req, res) =>
         }
 
         // 3. DUPLICATE CHECK: Check for existing attendance today
-        const startOfDay = new Date();
-        startOfDay.setHours(0, 0, 0, 0);
-        const endOfDay = new Date();
-        endOfDay.setHours(23, 59, 59, 999);
-        
-        const { Op } = require('sequelize'); // Make sure Op is imported at the top
-        const existing = await Attendance.findOne({ 
-            where: { 
-                employee_id,
-                date: { [Op.between]: [startOfDay, endOfDay] }
-            } 
-        });
+        // 3. DUPLICATE CHECK (FIXED FOR DATEONLY)
+const today = new Date().toISOString().split('T')[0];
 
-        if (existing) return res.status(400).json({ error: 'Already clocked in for today.' });
+const existing = await Attendance.findOne({
+    where: {
+        employee_id,
+        date: today
+    }
+});
+
+if (existing) {
+    return res.status(400).json({ error: 'Already clocked in for today.' });
+}
 
         // 4. CREATE RECORD
         const newRecord = await Attendance.create({
@@ -368,13 +367,15 @@ app.put('/api/attendance/clock-out', upload.single('image'), async (req, res) =>
 
         // 2. Find the LAST record where 'sign_out' is still NULL (Active Session)
         // We removed the strict "date" check to avoid bugs.
-        const record = await Attendance.findOne({ 
-            where: { 
-                employee_id: employee_id,
-                sign_out: null 
-            },
-            order: [['sign_in', 'DESC']] // Get the most recent one
-        });
+        const today = new Date().toISOString().split('T')[0];
+
+const record = await Attendance.findOne({
+    where: {
+        employee_id,
+        date: today,
+        sign_out: null
+    }
+});
 
         if (!record) {
             return res.status(404).json({ error: 'You are not clocked in!' });
