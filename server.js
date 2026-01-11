@@ -364,53 +364,54 @@ if (existing) {
 
 // --- IMPROVED CLOCK OUT ROUTE ---
 app.post('/api/attendance/clock-out', upload.single('image'), async (req, res) => {
+  try {
+    const { employee_id } = req.body;
 
-        const { employee_id } = req.body;
+    if (!employee_id) {
+      return res.status(400).json({ error: 'Employee ID is missing.' });
+    }
 
-        // 1. Validation
-        if (!employee_id) {
-            return res.status(400).json({ error: 'Employee ID is missing.' });
-        }
+    const today = new Date().toISOString().split('T')[0];
 
-        // 2. Find the LAST record where 'sign_out' is still NULL (Active Session)
-        // We removed the strict "date" check to avoid bugs.
-        const today = new Date().toISOString().split('T')[0];
-
-const record = await Attendance.findOne({
-    where: {
+    const record = await Attendance.findOne({
+      where: {
         employee_id,
         date: today,
         sign_out: null
+      }
+    });
+
+    if (!record) {
+      return res.status(404).json({ error: 'You are not clocked in!' });
     }
+
+    const now = new Date();
+    const diffMs = now - new Date(record.sign_in);
+    const totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
+
+    record.sign_out = now;
+    record.total_hours = totalHours;
+
+    if (req.file) {
+      record.clock_out_image = `/uploads/${req.file.filename}`;
+    }
+
+    await record.save();
+
+    console.log(`Clock-out success: ${totalHours} hours`);
+
+    res.json({
+      message: 'Clocked Out',
+      total_hours: totalHours,
+      data: record
+    });
+
+  } catch (error) {
+    console.error('Clock-out Error:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
-        if (!record) {
-            return res.status(404).json({ error: 'You are not clocked in!' });
-        }
-
-        // 3. Calculate Hours
-        const now = new Date();
-        const diffMs = now - new Date(record.sign_in); 
-        const totalHours = (diffMs / (1000 * 60 * 60)).toFixed(2);
-
-        // 4. Update Record
-        record.sign_out = now;
-        record.total_hours = totalHours;
-        
-        if (req.file) {
-            record.clock_out_image = `/uploads/${req.file.filename}`;
-        }
-        
-        await record.save();
-        
-        console.log(`>> Clock Out Success: ${totalHours} hours`);
-        res.json({ message: 'Clocked Out', total_hours: totalHours, data: record });
-
-    } catch (error) { 
-        console.error("Clock Out Error:", error);
-        res.status(500).json({ error: error.message }); 
-    }
-});
 app.get('/api/attendance', verifyOwner, async (req, res) => {
     try {
         const logs = await Attendance.findAll({
