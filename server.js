@@ -271,7 +271,7 @@ app.post('/api/employees', upload.single('profile_image'), async (req, res) => {
     } catch (error) { res.status(400).json({ error: error.message }); }
 });
 
-app.get('/api/employees', verifyOwner, async (req, res) => {
+app.get('/api/employees', async (req, res) => {
     try {
         const employees = await Employee.findAll({ order: [['created_at', 'DESC']] });
         res.json(employees);
