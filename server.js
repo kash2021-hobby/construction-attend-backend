@@ -302,13 +302,24 @@ app.delete('/api/employees/:id', verifyOwner, async (req, res) => {
 
 
 // --- ATTENDANCE (With Selfie Upload) ---
+// UPDATED CLOCK-IN ROUTE (Checks if Employee exists first)
 app.post('/api/attendance/clock-in', upload.single('image'), async (req, res) => {
     try {
         const { employee_id } = req.body;
+
+        // 1. Validate Employee Exists
+        const employee = await Employee.findByPk(employee_id);
+        if (!employee) {
+            return res.status(404).json({ error: 'Employee not found! Please check the ID.' });
+        }
+
+        // 2. Check if already clocked in
         const existing = await Attendance.findOne({ where: { employee_id, date: new Date() } });
+        if (existing) {
+            return res.status(400).json({ error: 'Already clocked in today.' });
+        }
 
-        if (existing) return res.status(400).json({ error: 'Already clocked in' });
-
+        // 3. Create Record
         const newRecord = await Attendance.create({
             employee_id,
             date: new Date(),
@@ -316,8 +327,13 @@ app.post('/api/attendance/clock-in', upload.single('image'), async (req, res) =>
             status: 'present',
             clock_in_image: req.file ? `/uploads/${req.file.filename}` : null
         });
-        res.status(201).json({ message: 'Clocked In', data: newRecord });
-    } catch (error) { res.status(500).json({ error: error.message }); }
+
+        res.status(201).json({ message: 'Clocked In Successfully', data: newRecord });
+
+    } catch (error) {
+        console.error("Clock In Error:", error); // Helpful for debugging
+        res.status(500).json({ error: error.message });
+    }
 });
 
 app.put('/api/attendance/clock-out', upload.single('image'), async (req, res) => {
