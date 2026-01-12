@@ -525,40 +525,33 @@ app.get('/api/attendance/employee/:employeeId', async (req, res) => {
 });
 // --- CHECK CURRENT STATUS ROUTE ---
 // --- CHECK CURRENT STATUS ROUTE (UPDATED) ---
+// --- CHECK STATUS ROUTE ---
 app.get('/api/attendance/status/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        const { Op } = require('sequelize');
         
-        // Define "Today" range
-        const startOfDay = new Date();
-        startOfDay.setHours(0,0,0,0);
-        const endOfDay = new Date();
-        endOfDay.setHours(23,59,59,999);
+        // Get Today's Date in YYYY-MM-DD (e.g., "2026-01-12")
+        const today = new Date().toISOString().split('T')[0];
 
-        // 1. Find ANY attendance record for TODAY
+        // Find record for THIS USER on THIS DATE
         const todaysRecord = await Attendance.findOne({ 
             where: { 
                 employee_id: id,
-                // Check records created between 00:00 and 23:59 today
-                created_at: { [Op.between]: [startOfDay, endOfDay] } 
+                date: today 
             } 
         });
 
-        // A. If NO record exists today -> User hasn't clocked in yet
+        // 1. If NO record for today -> Ready to Start (Shows Clock In)
         if (!todaysRecord) {
             return res.json({ status: 'out' });
         }
 
-        // B. If record exists AND has a sign_out time -> Shift is Over
+        // 2. If record exists AND has sign_out -> Shift is Done (Shows Shift Over)
         if (todaysRecord.sign_out) {
-            return res.json({ 
-                status: 'completed', 
-                total_hours: todaysRecord.total_hours 
-            });
+            return res.json({ status: 'completed' });
         }
 
-        // C. If record exists but NO sign_out -> User is working (Check Break)
+        // 3. Otherwise -> Working or Break
         const activeBreak = await BreakRecord.findOne({ 
             where: { employee_id: id, end_time: null } 
         });
@@ -567,14 +560,12 @@ app.get('/api/attendance/status/:id', async (req, res) => {
             return res.json({ status: 'break', start_time: activeBreak.start_time });
         }
 
-        // D. Just Clocked In
         return res.json({ status: 'in', start_time: todaysRecord.sign_in });
 
     } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
-
 // ==========================================
 // 8. START SERVER
 // ==========================================
