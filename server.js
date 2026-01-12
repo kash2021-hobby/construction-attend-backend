@@ -526,43 +526,53 @@ app.get('/api/attendance/employee/:employeeId', async (req, res) => {
 // --- CHECK CURRENT STATUS ROUTE ---
 // --- CHECK CURRENT STATUS ROUTE (UPDATED) ---
 // --- CHECK STATUS ROUTE ---
+// --- ROBUST STATUS CHECK (Fixes Timezone/Date Issues) ---
 app.get('/api/attendance/status/:id', async (req, res) => {
     try {
         const { id } = req.params;
-        
-        // Get Today's Date in YYYY-MM-DD (e.g., "2026-01-12")
-        const today = new Date().toISOString().split('T')[0];
 
-        // Find record for THIS USER on THIS DATE
-        const todaysRecord = await Attendance.findOne({ 
-            where: { 
-                employee_id: id,
-                date: today 
-            } 
+        // 1. Get the LAST attendance record for this user (regardless of date)
+        const lastRecord = await Attendance.findOne({
+            where: { employee_id: id },
+            order: [['created_at', 'DESC']] // Get the newest one
         });
 
-        // 1. If NO record for today -> Ready to Start (Shows Clock In)
-        if (!todaysRecord) {
+        // 2. If user has never clocked in before -> Ready to Start
+        if (!lastRecord) {
             return res.json({ status: 'out' });
         }
 
-        // 2. If record exists AND has sign_out -> Shift is Done (Shows Shift Over)
-        if (todaysRecord.sign_out) {
+        // 3. Check if the record is from "Today"
+        // We compare the database timestamp with the current server time
+        const recordDate = new Date(lastRecord.created_at).toDateString(); // e.g. "Mon Jan 12 2026"
+        const serverDate = new Date().toDateString();
+
+        // If the last record is from yesterday (or older), reset to "out"
+        if (recordDate !== serverDate) {
+            return res.json({ status: 'out' });
+        }
+
+        // 4. If record is from today, determine status
+        if (lastRecord.sign_out) {
+            // Signed out today -> SHIFT COMPLETED
             return res.json({ status: 'completed' });
+        } else {
+            // Not signed out yet -> WORKING
+            
+            // Check for active break
+            const activeBreak = await BreakRecord.findOne({ 
+                where: { employee_id: id, end_time: null } 
+            });
+
+            if (activeBreak) {
+                return res.json({ status: 'break', start_time: activeBreak.start_time });
+            }
+
+            return res.json({ status: 'in', start_time: lastRecord.sign_in });
         }
-
-        // 3. Otherwise -> Working or Break
-        const activeBreak = await BreakRecord.findOne({ 
-            where: { employee_id: id, end_time: null } 
-        });
-
-        if (activeBreak) {
-            return res.json({ status: 'break', start_time: activeBreak.start_time });
-        }
-
-        return res.json({ status: 'in', start_time: todaysRecord.sign_in });
 
     } catch (error) {
+        console.error("Status Check Error:", error);
         res.status(500).json({ error: error.message });
     }
 });
