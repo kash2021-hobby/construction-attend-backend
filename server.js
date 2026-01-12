@@ -523,6 +523,43 @@ app.get('/api/attendance/employee/:employeeId', async (req, res) => {
         res.status(500).json({ error: error.message });
     }
 });
+// --- CHECK CURRENT STATUS ROUTE ---
+app.get('/api/attendance/status/:id', async (req, res) => {
+    try {
+        const { id } = req.params;
+        
+        // 1. Check if Clocked In (Active Session)
+        const activeAttendance = await Attendance.findOne({ 
+            where: { employee_id: id, sign_out: null } 
+        });
+
+        if (!activeAttendance) {
+            // Not clocked in at all
+            return res.json({ status: 'out' });
+        }
+
+        // 2. Check if currently on Break
+        const activeBreak = await BreakRecord.findOne({ 
+            where: { employee_id: id, end_time: null } 
+        });
+
+        if (activeBreak) {
+            return res.json({ 
+                status: 'break', 
+                start_time: activeBreak.start_time 
+            });
+        }
+
+        // 3. Otherwise, just Clocked In
+        return res.json({ 
+            status: 'in', 
+            start_time: activeAttendance.sign_in 
+        });
+
+    } catch (error) {
+        res.status(500).json({ error: error.message });
+    }
+});
 
 // ==========================================
 // 8. START SERVER
