@@ -524,37 +524,51 @@ app.get('/api/attendance/employee/:employeeId', async (req, res) => {
     }
 });
 // --- CHECK CURRENT STATUS ROUTE ---
+// --- CHECK CURRENT STATUS ROUTE (UPDATED) ---
 app.get('/api/attendance/status/:id', async (req, res) => {
     try {
         const { id } = req.params;
+        const { Op } = require('sequelize');
         
-        // 1. Check if Clocked In (Active Session)
-        const activeAttendance = await Attendance.findOne({ 
-            where: { employee_id: id, sign_out: null } 
+        // Define "Today" range
+        const startOfDay = new Date();
+        startOfDay.setHours(0,0,0,0);
+        const endOfDay = new Date();
+        endOfDay.setHours(23,59,59,999);
+
+        // 1. Find ANY attendance record for TODAY
+        const todaysRecord = await Attendance.findOne({ 
+            where: { 
+                employee_id: id,
+                // Check records created between 00:00 and 23:59 today
+                created_at: { [Op.between]: [startOfDay, endOfDay] } 
+            } 
         });
 
-        if (!activeAttendance) {
-            // Not clocked in at all
+        // A. If NO record exists today -> User hasn't clocked in yet
+        if (!todaysRecord) {
             return res.json({ status: 'out' });
         }
 
-        // 2. Check if currently on Break
+        // B. If record exists AND has a sign_out time -> Shift is Over
+        if (todaysRecord.sign_out) {
+            return res.json({ 
+                status: 'completed', 
+                total_hours: todaysRecord.total_hours 
+            });
+        }
+
+        // C. If record exists but NO sign_out -> User is working (Check Break)
         const activeBreak = await BreakRecord.findOne({ 
             where: { employee_id: id, end_time: null } 
         });
 
         if (activeBreak) {
-            return res.json({ 
-                status: 'break', 
-                start_time: activeBreak.start_time 
-            });
+            return res.json({ status: 'break', start_time: activeBreak.start_time });
         }
 
-        // 3. Otherwise, just Clocked In
-        return res.json({ 
-            status: 'in', 
-            start_time: activeAttendance.sign_in 
-        });
+        // D. Just Clocked In
+        return res.json({ status: 'in', start_time: todaysRecord.sign_in });
 
     } catch (error) {
         res.status(500).json({ error: error.message });
