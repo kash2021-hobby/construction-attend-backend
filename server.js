@@ -192,6 +192,24 @@ LeaveRequest.belongsTo(Employee, { foreignKey: 'employee_id' });
 Employee.hasMany(BreakRecord, { foreignKey: 'employee_id' });
 BreakRecord.belongsTo(Employee, { foreignKey: 'employee_id' });
 
+// --- Alert Model (For Out-of-Range Warnings) ---
+const Alert = sequelize.define('Alert', {
+    id: { type: DataTypes.UUID, defaultValue: DataTypes.UUIDV4, primaryKey: true },
+    employee_id: { type: DataTypes.UUID, allowNull: false },
+    type: { type: DataTypes.ENUM('out_of_range', 'late', 'absent'), defaultValue: 'out_of_range' },
+    message: { type: DataTypes.STRING }, // e.g. "Out for 15 mins"
+    minutes_out: { type: DataTypes.INTEGER, defaultValue: 0 },
+    is_read: { type: DataTypes.BOOLEAN, defaultValue: false } // To show unread notifications
+}, {
+    tableName: 'alerts',
+    timestamps: true,
+    updatedAt: false,
+    createdAt: 'created_at'
+});
+
+// Relationship
+Employee.hasMany(Alert, { foreignKey: 'employee_id' });
+Alert.belongsTo(Employee, { foreignKey: 'employee_id' });
 // ==========================================
 // 6. MIDDLEWARE (Auth)
 // ==========================================
@@ -576,6 +594,42 @@ app.get('/api/attendance/status/:id', async (req, res) => {
 
     } catch (error) {
         console.error("Status Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// --- ADMIN ALERT ROUTE (UPDATED) ---
+app.post('/api/admin/alert/out-of-range', async (req, res) => {
+    try {
+        const { employee_id, minutes } = req.body;
+        
+        const employee = await Employee.findByPk(employee_id);
+        if (!employee) return res.status(404).json({ error: 'User not found' });
+
+        // 1. SAVE TO DATABASE (So Admin sees it later)
+        await Alert.create({
+            employee_id,
+            type: 'out_of_range',
+            minutes_out: minutes,
+            message: `${employee.full_name} was out of range for ${minutes} mins.`
+        });
+
+        console.log(`⚠️ ALERT SAVED: ${employee.full_name} (${minutes}m)`);
+
+        res.json({ message: 'Admin Notified & Saved' });
+    } catch (error) {
+        console.error("Alert Error:", error);
+        res.status(500).json({ error: error.message });
+    }
+});
+// --- GET ALL ALERTS (For Admin Dashboard) ---
+app.get('/api/admin/alerts', verifyOwner, async (req, res) => {
+    try {
+        const alerts = await Alert.findAll({
+            include: [{ model: Employee, attributes: ['full_name', 'profile_image'] }],
+            order: [['created_at', 'DESC']]
+        });
+        res.json(alerts);
+    } catch (error) {
         res.status(500).json({ error: error.message });
     }
 });
