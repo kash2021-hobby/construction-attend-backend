@@ -5,8 +5,11 @@ const { Sequelize, DataTypes } = require('sequelize');
 const bcrypt = require('bcrypt');
 const jwt = require('jsonwebtoken');
 const multer = require('multer'); // For file uploads
-const path = require('path');
-const fs = require('fs');
+// const path = require('path');
+const cloudinary = require('cloudinary').v2;
+const { CloudinaryStorage } = require('multer-storage-cloudinary');
+
+// const fs = require('fs');
 
 const SECRET_KEY = process.env.JWT_SECRET || 'super_secret_owner_key'; // CHANGE THIS IN PRODUCTION
 
@@ -42,22 +45,20 @@ console.log('==== ENV DEBUG END ====');
 // ==========================================
 
 // Ensure 'uploads' folder exists
-const uploadDir = './uploads';
-if (!fs.existsSync(uploadDir)){
-    fs.mkdirSync(uploadDir);
-}
+// const uploadDir = './uploads';
+// if (!fs.existsSync(uploadDir)){
+//     fs.mkdirSync(uploadDir);
+// }
 
 // Configure Storage
-const storage = multer.diskStorage({
-    destination: (req, file, cb) => {
-        cb(null, 'uploads/'); // Save files in 'uploads' folder
-    },
-    filename: (req, file, cb) => {
-        // Name file: timestamp_originalName.jpg
-        const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
-        cb(null, uniqueSuffix + path.extname(file.originalname));
-    }
+const storage = new CloudinaryStorage({
+  cloudinary,
+  params: {
+    folder: 'attendance_app',
+    allowed_formats: ['jpg', 'jpeg', 'png'],
+  },
 });
+
 
 const upload = multer({ 
   storage,
@@ -68,7 +69,7 @@ const upload = multer({
 
 
 // Make the 'uploads' folder public so frontend can display images
-app.use('/uploads', express.static('uploads')); 
+// app.use('/uploads', express.static('uploads')); 
 
 
 // ==========================================
@@ -84,6 +85,12 @@ const sequelize = new Sequelize(
         logging: false
     }
 );
+
+cloudinary.config({
+  cloud_name: process.env.CLOUDINARY_CLOUD_NAME,
+  api_key: process.env.CLOUDINARY_API_KEY,
+  api_secret: process.env.CLOUDINARY_API_SECRET,
+});
 
 // ==========================================
 // 4. DEFINE MODELS
@@ -289,7 +296,7 @@ app.post('/api/employees', upload.single('profile_image'), async (req, res) => {
     try {
         const employeeData = req.body;
         if (req.file) {
-            employeeData.profile_image = `/uploads/${req.file.filename}`;
+            employeeData.profile_image = req.file.path;
         }
         const newEmp = await Employee.create(employeeData);
         res.status(201).json({ message: 'Created', data: newEmp });
