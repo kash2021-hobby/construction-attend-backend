@@ -314,6 +314,16 @@ app.put('/api/employees/:id', verifyOwner, upload.single('profile_image'), async
     }
 });
 
+app.post('/api/employees', upload.single('profile_image'), async (req, res) => {
+    try {
+        const employeeData = req.body;
+        if (req.file) {
+            employeeData.profile_image = req.file.path; // Cloudinary URL
+        }
+        const newEmp = await Employee.create(employeeData);
+        res.status(201).json({ message: 'Created', data: newEmp });
+    } catch (error) { res.status(400).json({ error: error.message }); }
+});
 
 app.get('/api/employees', async (req, res) => {
     try {
