@@ -292,16 +292,28 @@ app.post('/api/auth/login', async (req, res) => { // Owner Login
 
 
 // --- EMPLOYEES (With Image Upload) ---
-app.post('/api/employees', upload.single('profile_image'), async (req, res) => {
+app.put('/api/employees/:id', verifyOwner, upload.single('profile_image'), async (req, res) => {
     try {
-        const employeeData = req.body;
+        const updateData = req.body;
+        
+        // If a new image was uploaded, use the Cloudinary URL
         if (req.file) {
-            employeeData.profile_image = req.file.path;
+            updateData.profile_image = req.file.path;
         }
-        const newEmp = await Employee.create(employeeData);
-        res.status(201).json({ message: 'Created', data: newEmp });
-    } catch (error) { res.status(400).json({ error: error.message }); }
+        
+        const [updated] = await Employee.update(updateData, { where: { id: req.params.id } });
+        
+        if (updated) {
+            const emp = await Employee.findByPk(req.params.id);
+            res.json({ message: 'Updated', data: emp });
+        } else { 
+            res.status(404).json({ error: 'Not found' }); 
+        }
+    } catch (error) { 
+        res.status(500).json({ error: error.message }); 
+    }
 });
+
 
 app.get('/api/employees', async (req, res) => {
     try {
